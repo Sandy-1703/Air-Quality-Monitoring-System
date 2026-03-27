@@ -1,0 +1,151 @@
+#define BLYNK_TEMPLATE_ID "TMPL34cSEPpeQ"
+#define BLYNK_TEMPLATE_NAME "AIR QUALITY MONITORING"
+#define BLYNK_AUTH_TOKEN "_GNcwAo9VpCQapw3-5AazxbT2pljoAKU"
+
+#ifdef ESP32
+  #include <WiFi.h>
+  #include <BlynkSimpleEsp32.h>
+#else
+  #include <ESP8266WiFi.h>
+  #include <BlynkSimpleEsp8266.h>
+#endif
+
+#define BLYNK_PRINT Serial
+ 
+char auth[] = "_GNcwAo9VpCQapw3-5AazxbT2pljoAKU";    // authuntifaction id
+char ssid[] = "project12";   //wifi name
+char pass[] = "project12";   //wifi password
+
+#include "ThingSpeak.h"
+unsigned long ch_no = 3257558;//Replace with ThingSpeak Channel number
+const char * write_api = "5FTEW3B55GL2ISZ4";//Replace with ThingSpeak write API
+
+WiFiClient  client;
+
+#include<LiquidCrystal_I2C.h>
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+#define gas 33
+int gas_sense;
+String gas_status=" ";
+
+#define buzzer 15
+
+int a=0;
+int b=0;
+
+void setup()
+{
+  Serial.begin(9600);
+
+  pinMode(gas,INPUT);
+
+  pinMode(buzzer,OUTPUT);
+  digitalWrite(buzzer,LOW);
+
+  pinMode(2,OUTPUT);
+  digitalWrite(2,LOW);
+
+  pinMode(buzzer,OUTPUT);
+  digitalWrite(buzzer,LOW);
+
+  lcd.init();
+  lcd.backlight();
+  delay(100);
+
+  lcd.clear();
+  lcd.print("CONNECTING TO...");
+  lcd.setCursor(0,1);
+  lcd.print(ssid);
+  delay(500);
+  
+  Serial.println("CONNECTING TO...");
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, pass);
+  
+  while(WiFi.status() != WL_CONNECTED)
+  {
+    delay(100);
+    Serial.println(".");
+  }
+  Serial.println(WiFi.localIP());
+
+  Serial.println(" WIFI CONNECTED ");
+  Serial.println(WiFi.localIP());
+  delay(1000);
+
+  Blynk.config(auth);
+
+  ThingSpeak.begin(client);
+
+  lcd.clear();
+  lcd.print(" WIFI CONNECTED ");
+  lcd.setCursor(0,1);
+  lcd.print(WiFi.localIP());
+  delay(1500);
+
+  lcd.clear();
+  lcd.print("   AIR QUALITY  ");
+  lcd.setCursor(0,1);
+  lcd.print("   MONITORING   ");
+  delay(1500);
+}
+void senddata()
+{
+  ThingSpeak.setField(1,gas_sense);
+  ThingSpeak.writeFields(ch_no, write_api);
+}
+void beep()
+{
+  digitalWrite(buzzer,HIGH);delay(500);digitalWrite(buzzer,LOW);delay(500);
+  digitalWrite(buzzer,HIGH);delay(500);digitalWrite(buzzer,LOW);delay(500);
+}
+void loop()
+{
+  Blynk.run();
+  
+  b=b+1;
+  if(b>40)
+  {
+    b=0;
+  }
+  
+  gas_sense=analogRead(gas);
+  gas_sense=map(gas_sense,0,4096,0,100);
+  gas_sense=100-gas_sense;
+  Serial.print("GAS : ");Serial.println(gas_sense);
+
+  if(gas_sense <= 80)
+  {
+    gas_status="ALERT";
+    a=a+1;
+    beep();
+  }
+  else
+  {
+    a=0;
+    gas_status="NORMAL";
+  }
+  
+  if(a==3)
+  {
+    a=0;
+    Serial.println("ALERT");
+    Blynk.logEvent("gas_alert");
+    Blynk.virtualWrite(V0,gas_sense);
+  }
+
+  if(b==40)
+  {
+    Blynk.virtualWrite(V0,gas_sense);
+  }
+  
+  lcd.clear();
+  lcd.print("GAS : ");lcd.print(gas_sense);lcd.print("%");
+  lcd.setCursor(0,1);
+  lcd.print("STATUS: ");lcd.print(gas_status);
+  digitalWrite(2,HIGH);delay(300);digitalWrite(2,LOW);delay(200);
+  
+  senddata();
+}
